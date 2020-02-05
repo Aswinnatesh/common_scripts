@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Feb  4 17:49:57 2020
-
-@author: avenkatesh
-"""
-
 """
 Created on Fri Sep 27 11:21:00 2019
 Run Command: python reg_tracker_syntax.py -i <input file> -n <function_name> -p <project_name>
@@ -23,7 +16,7 @@ NOTE:
     #5: Remove Excel - Horizon Compaitable
 """
 
-import re, sys, xlrd, xlwt, os, argparse
+import re, sys, os, argparse
 from collections import Counter
 from xlrd import open_workbook
 from xlutils.copy import copy
@@ -67,33 +60,16 @@ def HostConfig(f):
             if "spi_clk_freq" in line: f.write ("//SIFS CLOCK FREQ: %s\n" %line.split(":")[1].strip()) 
             if "spi_mode_selection" in line: f.write ("//SIFS MODE: %s\n" %line.split(":")[1].strip()) 
 
-def ExcelDetectPoll():
+def ExcelDetectPoll(samples, pre):
     col_a = []
-    rb = open_workbook('Data.xls')
-    sheet1 = rb.sheet_by_index(0)
-    nrows = range(sheet1.nrows)
-    for row in nrows:
-        if sheet1.row(row)[0].value == "RD": col_a.append(sheet1.row(row)[1].value)
+    for i in range(0,len(samples)):
+        reg   = RegAccess(i, samples, pre)
+        typ   = (samples[i].split("|")[5].strip())
+        if typ == "RD": col_a.append(reg)
     counts = Counter(col_a)
     RdPoll = [item for item, count in counts.items() if count >= 2]
     return RdPoll
 
-def ExcelExport(samples, pre, wb): #Write to Excel Sheet
-    sheet1 = wb.add_sheet('Sheet 1') 
-    for i in range(0,len(samples)):
-        ap  = (samples[i].split("|")[8].strip())
-        if ap == "AP":
-            reg   = (pre + samples[i].split("|")[4].strip())
-            val   = (samples[i].split("|")[7].strip()[-2:])
-            typ   = (samples[i].split("|")[5].strip())
-            delay = int(samples[i].split("|")[9].strip())
-            sheet1.write(i, 0, typ) 
-            sheet1.write(i, 1, reg) 
-            sheet1.write(i, 2, val) 
-            if  delay != 0 : sheet1.write(i, 3, delay) 
-            else: sheet1.write(i, 3, 0) 
-    wb.save('Data.xls') 
- 
 def AddDelay(ps, f):
     delay_us = round(int(ps) * 1e-6)
     f.write("\tDelayUs(%d);\n\n" %delay_us)
@@ -114,6 +90,12 @@ def ScoreBoard(f, RdError, PollError):
     f.write ("\tprintf(\"\\t REG-TRACKER SCOREBOARD \\n\");\n")
     f.write ("\tif (RdError!= %d && PollError!= %d) \n\t\tprintf(\"Test Failed! RdError = %%s RdError = %%s \",RdError, PollError);\n" %(RdError,PollError))
     f.write ("\telse \n\t\tprintf(\"\\t Test Passed!\\n\");\n")
+
+def RegAccess(i,samples, pre):
+    if i < len(samples):
+        return (pre + samples[i].split("|")[4].strip())
+    else:
+        return 0
     
 def RegTransaction(f, wb, pre):
     samples = []
@@ -123,23 +105,23 @@ def RegTransaction(f, wb, pre):
         for line in inputfile.readlines():
             if re.match(r'[(|)]', line): 
                 samples.append(line)
-                
-        ExcelExport(samples, pre, wb)   #Excel Not Necessary
-        RdPoll = ExcelDetectPoll()      #Excel Not Necessary
+        RdPoll = ExcelDetectPoll(samples, pre)      
         print(RdPoll)
                 
         for i in range(0,len(samples)):
             ap  = (samples[i].split("|")[8].strip())        
             if ap == "AP":
-                reg   = (pre + samples[i].split("|")[4].strip())
+                reg   = RegAccess(i, samples, pre)
                 val   = (samples[i].split("|")[7].strip()[-2:])
                 typ   = (samples[i].split("|")[5].strip())
                 delay = int(samples[i].split("|")[9].strip())        
                 
                 if delay != 0 : AddDelay(delay, f)                 
-                if reg in RdPoll :                      #AP RD POLL Syntax
-                    AP_RD_POLL(reg, val, f)     
-                    PollError = PollError + 1                            
+                if reg in RdPoll :  #AP RD POLL Syntax
+                    if reg == RegAccess(i+1, samples, pre) :continue
+                    else: 
+                        AP_RD_POLL(reg, val, f)     
+                        PollError = PollError + 1                            
                 elif typ == "RD" :                      #AP READ Syntax
                     AP_RD(reg, val, f)  
                     RdError = RdError + 1
@@ -154,7 +136,7 @@ def ClearDir():
 def main():
     f= open("%s.c" %args.name,"w+")
     wb = xlwt.Workbook()
-    ClearDir()
+#    ClearDir()
     OutputFile(f)
     HostConfig(f)
     pre = ProjectPrefix(f)  
