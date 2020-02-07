@@ -61,31 +61,7 @@ def HostConfig():
             if "Serial Interface Protocol" in line: f.write ("\n//SIFS PROTOCOL: %s\n" %line.split(":")[1].strip()) 
             if "spi_clk_freq" in line: f.write ("//SIFS CLOCK FREQ: %s\n" %line.split(":")[1].strip()) 
             if "spi_mode_selection" in line: f.write ("//SIFS MODE: %s\n" %line.split(":")[1].strip()) 
-
-def AddDelay(ps):
-    delay_us = round(int(ps) * 1e-6)
-    f.write("\tDelayUs(%d);\n\n" %delay_us)
-
-def AP_WR(inp, i):
-    if GetData(inp, i, "DEL") != 0 : AddDelay(int(GetData(inp, i, "DEL")))
-    f.write ("\twrite_register(%s, 0x%s);\n\n" %(GetData(inp, i, "REG"), GetData(inp, i, "VAL")))  #Write Register 
-
-def AP_RD(inp, i):
-    if GetData(inp, i, "DEL") != 0 : AddDelay(int(GetData(inp, i, "DEL")))
-    f.write ("\tRdata = read_register(%s, 0x%s);" %(GetData(inp, i, "REG"), GetData(inp, i, "VAL")))  #Write Register
-    f.write ("\n\tif (Rdata != 0x%s) {RdError = RdError + 1;} \n\n" %(GetData(inp, i, "VAL")))  #Write Register
-    
-def AP_RD_POLL(inp, i):  
-    if GetData(inp, i, "DEL") != 0 : AddDelay(int(GetData(inp, i, "DEL")))
-    f.write ("\tTimeoutMs(1);")
-    f.write ("\n\twhile((read_register(%s)!=0x%s) && TIMEOUT_NOT_EXPIRED);" %(GetData(inp, i, "REG"),GetData(inp, i, "VAL")))  #Write Register
-    f.write ("\n\tif(!TIMEOUT_NOT_EXPIRED) {PollError = PollError + 1;}\n\n")  #Write Register
-
-def ScoreBoard(RdError, PollError):
-    f.write ("\tprintf(\"\\t REG-TRACKER SCOREBOARD \\n\");\n")
-    f.write ("\tif (RdError!= %d && PollError!= %d) \n\t\tprintf(\"Test Failed! RdError = %%s RdError = %%s \",RdError, PollError);\n" %(RdError,PollError))
-    f.write ("\telse \n\t\tprintf(\"\\t Test Passed!\\n\");\n")
-
+            
 #################################################################################################################################################
 
 def ExcelDetectPoll(inp):
@@ -113,12 +89,49 @@ def GetData(inp, i, typ):
         print("INVALID LINE INDEX:%d" %i) 
         return 0
             
+def AddDelay(ps):
+    delay_us = round(int(ps) * 1e-6)
+    f.write("\tDelayUs(%d);" %delay_us)
+
+def AP_WR(inp, i):
+    if GetData(inp, i, "DEL") != 0 : AddDelay(int(GetData(inp, i, "DEL")))
+    f.write ("\twrite_register(%s, 0x%s);\n\n" %(GetData(inp, i, "REG"), GetData(inp, i, "VAL")))  #Write Register 
+
+def AP_RD(inp, i):
+    if GetData(inp, i, "DEL") != 0 : AddDelay(int(GetData(inp, i, "DEL")))
+    f.write ("\tRdata = read_register(%s, 0x%s);" %(GetData(inp, i, "REG"), GetData(inp, i, "VAL")))  #Write Register
+    f.write ("\n\tif (Rdata != 0x%s) {RdError = RdError + 1;} \n\n" %(GetData(inp, i, "VAL")))  #Write Register
+    
+def ScoreBoard(RdError, PollError):
+    f.write ("\tprintf(\"\\t REG-TRACKER SCOREBOARD \\n\");\n")
+    f.write ("\tif (RdError!= %d && PollError!= %d) \n\t\tprintf(\"Test Failed! RdError = %%s RdError = %%s \",RdError, PollError);\n" %(RdError,PollError))
+    f.write ("\telse \n\t\tprintf(\"\\t Test Passed!\\n\");\n")
+
+def AP_RD_POLL(inp, i):  
+    global i_prev
+    REG     = GetData(inp, i, "REG")
+    VAL     = GetData(inp, i, "VAL")
+    
+    if i_prev==i: AP_RD(inp, i); return 0
+    
+    if REG == GetData(inp, (i+1), "REG"):                                                   #It's a Concorrunt Polling 
+        if VAL != "00" and GetData(inp, (i+1), "VAL") == "00": 
+            f.write ("\tTimeoutMs(1);")
+            f.write ("\n\twhile((read_register(%s)!=0x%s) && TIMEOUT_NOT_EXPIRED);{" %(REG,VAL))
+            if GetData(inp, i, "DEL") != 0: AddDelay(int(GetData(inp, i, "DEL")))
+            f.write ("\t}\n\tif(!TIMEOUT_NOT_EXPIRED) {PollError = PollError + 1;}\n\n")
+            i_prev = i + 1
+        else: return                                                                        #It's not a Read on Clear Reg Polling                                  
+    else:                                                                                   #Do a simple While Loop Poll
+        f.write ("\tTimeoutMs(1);")
+        f.write ("\n\twhile((read_register(%s)!=0x%s) && TIMEOUT_NOT_EXPIRED);{" %(REG,VAL))
+        if GetData(inp, i, "DEL") != 0 : AddDelay(int(GetData(inp, i, "DEL")))
+        f.write ("}\n\tif(!TIMEOUT_NOT_EXPIRED) {PollError = PollError + 1;}\n\n")  
+
 #################################################################################################################################################
         
-def main():
-    RdError,PollError = 0 , 0
-    inp = []
-    
+def main():    
+    global RdError,PollError
     #Step 1: Print Project Specific Headers
     ProjectSpecifics(0)
     
@@ -154,5 +167,7 @@ def main():
     f.close()
 #################################################################################################################################################
 f= open("%s.c" %args.name,"w+")
+RdError,PollError, i_prev = 0 , 0, 1000
+inp = []
 main() #MAIN
 #################################################################################################################################################
