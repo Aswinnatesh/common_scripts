@@ -25,6 +25,7 @@ pdf2merge = []
 for filename in os.listdir("."):
     if filename.endswith(".pdf"):
         pdf2merge.append(filename)
+pdf2merge.sort(key=lambda x: x)
 
 pdfWriter = PyPDF2.PdfFileWriter()
 
