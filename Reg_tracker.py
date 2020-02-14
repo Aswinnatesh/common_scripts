@@ -146,9 +146,7 @@ def main():
     #Step 4: Iterate for each Register - Indetify type and call individual functions          
     for i in range(0,len(inp)):
         REG     = GetData(inp, i, "REG")
-        VAL     = GetData(inp, i, "VAL")
         TYP     = GetData(inp, i, "TYP")
-        DEL     = GetData(inp, i, "DEL")   
         
         if GetData(inp, i, "ACC") == "AP" : 
                                
@@ -165,6 +163,7 @@ def main():
     #Step 6: End and close Output file
     f.write ("\nreturn 0; } \n#endif \n")
     f.close()
+    
 #################################################################################################################################################
 f= open("%s.c" %args.name,"w+")
 RdError,PollError, i_prev = 0 , 0, 1000
