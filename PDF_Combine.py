@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Feb  7 17:06:20 2020
-
 @author: avenkatesh
 """
-
-#geektechstuff
 #Python script to merge multiple PDF files into one PDF
 
 #Requires the “PyPDF2” and “OS” modules to be imported
