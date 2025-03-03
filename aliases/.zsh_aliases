@@ -1,0 +1,9 @@
+
+
+export CLICOLOR=1  # Enable colorized output
+export LSCOLORS=BxFxCxDxBxegedabagaced
+
+# Basic aliases
+alias ll='ls -l'
+alias path='readlink -f'
+alias awake='caffeinate -s -d -i -m -u'
